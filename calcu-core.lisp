@@ -96,6 +96,11 @@
   (reset-calculator calc)
   (setf (calculator-error-p calc) t))
 
+(defparameter *unary-operations*
+  `((sqrt ,(lambda (x)
+		   (assert (>= x 0))
+		   (sqrt x)))))
+
 (defun unary-operation->function (operation)
   (second (assoc operation *unary-operations*)))
 
@@ -108,11 +113,6 @@
 	     (setf (calculator-x calc) result)
 	     (reset-input calc))
 	    (t (throw-error calc))))))
-
-(defparameter *unary-operations*
-  `((sqrt ,(lambda (x)
-		   (assert (>= x 0))
-		   (sqrt x)))))
 
 (defparameter *normal-binary-operations*
   `((+ ,#'+)
@@ -199,9 +199,14 @@
 
 (defun displayed-value (calc)
   (if (display-buffer-empty-p (calculator-buffer calc))
-      (values (string-right-trim "0" (format nil (format nil "~~~DF" (1+ (calculator-capacity calc)))
-					     (abs (calculator-x calc))))
-	      (minusp (calculator-x calc)))
+      (let* ((abs (abs (calculator-x calc)))
+	     (format-string (if (< abs 1)
+				(format nil "~~~D,~DF"
+					(1+ (calculator-capacity calc))
+					(1- (calculator-capacity calc)))
+				(format nil "~~~DF" (1+ (calculator-capacity calc))))))
+	(values (string-right-trim "0" (format nil format-string abs))
+		(minusp (calculator-x calc))))
       (values (copy-seq (display-buffer-buffer (calculator-buffer calc)))
 	      (display-buffer-minusp (calculator-buffer calc)))))
 
@@ -225,9 +230,7 @@
     (#\= ,(lambda (calc) (compute calc t nil)))
     (#\% ,(lambda (calc) (compute calc t nil t)))
     (#\a ,(lambda (calc) (reset-calculator calc)))
-    (#\c ,(lambda (calc)
-		  (setf (calculator-x calc) 0)
-		  (display-buffer-reset (calculator-buffer calc))))
+    (#\c ,(lambda (calc) (c calc)))
     (#\y ,(lambda (calc) (m calc)))
     (#\p ,(lambda (calc) (mr calc)))
     (#\u ,(lambda (calc) (m+ calc)))
@@ -236,8 +239,7 @@
     (#\s ,(lambda (calc) (feed-unary-operation 'sqrt calc)))))
 
 (defun display-string (calc)
-  (let ((hline (make-string (+ 6 (calculator-capacity calc)) :initial-element #\-))
-	(body-line (make-string (+ 6 (calculator-capacity calc)) :initial-element #\Space)))
+  (let ((body-line (make-string (+ 4 (calculator-capacity calc)) :initial-element #\Space)))
     (multiple-value-bind (number minusp) (displayed-value calc)
       (unless (zerop (calculator-mem calc))
 	(setf (char body-line 0) #\M))
@@ -250,7 +252,7 @@
 	  (progn
 	    (replace body-line number :start1 (- (length body-line) (length number) 1))
 	    (setf (char body-line (1- (length body-line))) #\.)))
-      (format nil "~&~A~%~A~%~A~%" hline body-line hline))))
+      body-line)))
 
 (defun text-calculator (&optional (capacity *default-capacity*))
   (let ((calc (make-calculator capacity)))
